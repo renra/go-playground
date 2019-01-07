@@ -2,41 +2,55 @@ package main
 
 import (
   "fmt"
+  "html/template"
   "io/ioutil"
   "log"
   "net/http"
-  //"reflect"
 )
 
-type Page struct {
-  Title string
-  Body  []byte
+type Translation struct {
+  English string
+  Sanskrit  []byte
 }
 
-func (p *Page) save() error {
-  filename := p.Title + ".txt"
-  return ioutil.WriteFile(filename, p.Body, 0600)
+func (p *Translation) save() error {
+  filename := p.English + ".txt"
+  return ioutil.WriteFile(filename, p.Sanskrit, 0600)
 }
 
-func loadPage(title string) (*Page, error) {
-  filename := title + ".txt"
-  body, err := ioutil.ReadFile(filename)
+func loadTranslation(english string) (*Translation, error) {
+  filename := english + ".txt"
+  sanskrit, err := ioutil.ReadFile(filename)
 
   if err == nil {
-    return &Page{Title: title, Body: body}, nil
+    return &Translation{English: english, Sanskrit: sanskrit}, nil
   } else {
     return nil, err
   }
 }
 
-func router(response http.ResponseWriter, req *http.Request) {
-  word := req.URL.Path[1:]
-  loadedPage, err := loadPage(word)
+func indexHandler(response http.ResponseWriter, req *http.Request) {
+  t, _ := template.ParseFiles("templates/index.html")
+  t.Execute(response, nil)
+}
 
-  if err != nil {
-    fmt.Fprintf(response, "<h1>Sanskrit dictionary</h1><div>Sorry. I do not know the word: <strong>%s</strong></div>", word)
+func english2SanskritHandler(response http.ResponseWriter, req *http.Request) {
+  word, ok := req.URL.Query()["english"]
+
+  if ok {
+    loadedTranslation, err := loadTranslation(word[0])
+
+    if err == nil {
+      t, _ := template.ParseFiles("templates/english2sanskrit.html")
+      t.Execute(response, loadedTranslation)
+    } else {
+      t, _ := template.ParseFiles("templates/word_not_found.html")
+      translation := Translation{English: word[0], Sanskrit: nil}
+      t.Execute(response, &translation)
+    }
+
   } else {
-    fmt.Fprintf(response, "<h1>Sanskrit dictionary</h1><div>%s</div>", loadedPage.Body)
+    indexHandler(response, req)
   }
 }
 
@@ -44,6 +58,8 @@ func main() {
   port := 8080
   fmt.Println(fmt.Sprintf("Sanskrit dictionary is listening on port %d", port))
 
-  http.HandleFunc("/", router)
+  http.HandleFunc("/english2sanskrit", english2SanskritHandler)
+  http.HandleFunc("/", indexHandler)
+
   log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), nil))
 }
